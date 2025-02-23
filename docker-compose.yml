@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  backend:
+    build: 
+      context: ./cm.backend
+      dockerfile: Dockerfile
+    container_name: cm-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./cm.backend:/app
+      - /app/env
+    environment:
+      - PYTHONPATH=/app
+    networks:
+      - cm-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./cm.frontend
+      dockerfile: Dockerfile
+    container_name: cm-frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./cm.frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://backend:8000
+    depends_on:
+      - backend
+    networks:
+      - cm-network
+    restart: unless-stopped
+
+networks:
+  cm-network:
+    driver: bridge
