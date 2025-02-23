@@ -46,6 +46,12 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
+def encrypt_extension(extension, key):
+    return encrypt_aes(extension.encode(), key)
+
+def decrypt_extension(encrypted_extension, key):
+    return decrypt_aes(encrypted_extension, key)
+
 @app.get("/")
 def read_root():
     logger.info("Проверка работы сервера")
@@ -106,74 +112,61 @@ def decrypt_text_aes(
 def encrypt_file(
     file: UploadFile = File(...),
     key: str = Form(...),
-    method: str = Form(...),
     token: str = Depends(oauth2_scheme)
 ):
-    logger.info(f"Начато шифрование файла: {file.filename}")
     verify_token(token)
-
+    
     if len(key) not in [16, 24, 32]:
-        logger.warning("Неверная длина ключа")
         raise HTTPException(status_code=400, detail="Key must be 16, 24, or 32 bytes long")
 
     try:
         content = file.file.read()
-        logger.info(f"Файл {file.filename} загружен, размер: {len(content)} байт")
+        filename, ext = os.path.splitext(file.filename)
+        encrypted_ext = encrypt_extension(ext, key)
 
-        if method == "aes":
-            encrypted_content = encrypt_file_aes(content, key)
-        else:
-            logger.warning("Неподдерживаемый метод шифрования")
-            raise HTTPException(status_code=400, detail="Unsupported encryption method")
+        encrypted_content = encrypt_file_aes(content, key)
+        final_content = encrypted_ext.encode() + b'\n' + encrypted_content
 
-        output_file = f"{UPLOAD_DIR}/{file.filename}.enc"
-        filename_enc = f"{file.filename}.enc"
+        output_file = f"{UPLOAD_DIR}/{filename}.enc"
         with open(output_file, "wb") as f:
-            f.write(encrypted_content)
+            f.write(final_content)
 
-        logger.info(f"Файл успешно зашифрован и сохранен как {output_file}")
         return StreamingResponse(
-            BytesIO(encrypted_content),
+            BytesIO(final_content),
             media_type="application/octet-stream",
-            headers={"Content-Disposition": f"attachment; filename={filename_enc}.enc"}
+            headers={"Content-Disposition": f"attachment; filename={filename}.enc"}
         )
 
     except Exception as e:
-        logger.error(f"Ошибка шифрования файла: {str(e)}", exc_info=True)
+        logger.error(f"Ошибка шифрования файла: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
+
 
 @app.post("/decrypt/file")
 def decrypt_file(
     file: UploadFile = File(...),
     key: str = Form(...),
-    method: str = Form(...),
     token: str = Depends(oauth2_scheme)
 ):
-    logger.info(f"Начато расшифрование файла: {file.filename}")
     verify_token(token)
 
     try:
         content = file.file.read()
-        logger.info(f"Файл {file.filename} загружен, размер: {len(content)} байт")
+        encrypted_ext, encrypted_content = content.split(b'\n', 1)
+        ext = decrypt_extension(encrypted_ext.decode(), key)
 
-        if method == "aes":
-            decrypted_content = decrypt_file_aes(content, key)
-        else:
-            logger.warning("Неподдерживаемый метод дешифрования")
-            raise HTTPException(status_code=400, detail="Unsupported decryption method")
-        
-        filename, ext = os.path.splitext(file.filename)
+        decrypted_content = decrypt_file_aes(encrypted_content, key)
+        output_file = f"{UPLOAD_DIR}/decrypted_file{ext}"
 
-        output_file = f"{UPLOAD_DIR}/{filename}_decrypted{ext}"
         with open(output_file, "wb") as f:
             f.write(decrypted_content)
 
-        logger.info(f"Файл успешно расшифрован и сохранен как {output_file}")
         return StreamingResponse(
-            BytesIO(decrypted_content), 
-            headers={"Content-Disposition": f"attachment; filename={file.filename.replace('.enc', '')}"}
-            )
+            BytesIO(decrypted_content),
+            headers={"Content-Disposition": f"attachment; filename=decrypted_file{ext}"}
+        )
 
     except Exception as e:
-        logger.error(f"Ошибка расшифрования файла: {str(e)}", exc_info=True)
+        logger.error(f"Ошибка расшифрования файла: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
+
