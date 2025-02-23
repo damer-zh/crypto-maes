@@ -4,12 +4,28 @@
     <h1 class="text-2xl font-bold mb-4">Сервис шифрования и дешифрования</h1>
 
     <!-- Аутентификация -->
-    <div :class="{ 'fade-out': token }" class="mb-6">
+    <div v-if="!token" class="mb-6">
       <h2 class="text-xl mb-2">Вход</h2>
       <input v-model="username" placeholder="Логин" class="border p-2 w-full mb-2" />
       <input v-model="password" type="password" placeholder="Пароль" class="border p-2 w-full mb-2" />
       <button @click="login" class="bg-blue-500 text-white p-2 rounded">Войти</button>
       <p v-if="authError" class="text-red-500 mt-2">{{ authError }}</p>
+    </div>
+
+    <div v-if="token" class="absolute top-4 right-4">
+      <button @click="logout" class="bg-red-500 text-white p-2 rounded">
+        Выйти
+      </button>
+    </div>
+
+    <!-- client credentials -->
+    <div v-if="!token" class="mb-6">
+      <h2 class="text-xl mb-2">Вход через Client Credentials</h2>
+      <input v-model="clientId" placeholder="Client ID" class="border p-2 w-full mb-2" />
+      <input v-model="clientSecret" type="password" placeholder="Client Secret" class="border p-2 w-full mb-2" />
+      <button @click="getClientToken" class="bg-purple-500 text-white p-2 rounded">
+        Получить токен
+      </button>
     </div>
 
     <!-- Форма для текста -->
@@ -34,7 +50,7 @@
         <button @click="decryptFile" class="bg-green-500 text-white p-2 rounded">Расшифровать файл</button>
       </div>
     </div>
-  </div>
+    </div>
 </template>
 
 <script>
@@ -102,7 +118,17 @@ export default {
           throw new Error('Неверный формат ответа');
         }
       } catch (error) {
-        console.error(error);  // Добавить логирование ошибки
+          if (error.response?.status === 429) {
+          const retryAfter = error.response.headers['retry-after'];
+          this.result = `Превышен лимит запросов. Попробуйте снова через ${retryAfter} секунд`;
+          
+          // Можно добавить автоматическую повторную попытку
+          setTimeout(() => {
+            this.encryptText();
+          }, retryAfter * 1000);
+        } else {
+          this.result = 'Ошибка шифрования: ' + (error.response?.data?.detail || error.message);
+        }
         this.result = 'Ошибка шифрования: ' + (error.response?.data?.detail || error.message);
       }
     },
@@ -119,7 +145,17 @@ export default {
         });
         this.result = response.data.decrypted_text;
       } catch (error) {
-        console.error(error);  // Добавить логирование ошибки
+          if (error.response?.status === 429) {
+          const retryAfter = error.response.headers['retry-after'];
+          this.result = `Превышен лимит запросов. Попробуйте снова через ${retryAfter} секунд`;
+          
+          // Можно добавить автоматическую повторную попытку
+          setTimeout(() => {
+            this.decryptText();
+          }, retryAfter * 1000);
+        } else {
+          this.result = 'Ошибка шифрования: ' + (error.response?.data?.detail || error.message);
+        }
         this.result = 'Ошибка дешифрования';
       }
     },
@@ -144,6 +180,17 @@ export default {
         this.downloadFile(response.data, response);
       } catch (error) {
         alert('Ошибка шифрования файла');
+        if (error.response?.status === 429) {
+          const retryAfter = error.response.headers['retry-after'];
+          this.result = `Превышен лимит запросов. Попробуйте снова через ${retryAfter} секунд`;
+          
+          // Можно добавить автоматическую повторную попытку
+          setTimeout(() => {
+            this.encryptFile();
+          }, retryAfter * 1000);
+        } else {
+          this.result = 'Ошибка шифрования: ' + (error.response?.data?.detail || error.message);
+        }
       }
     },
     async decryptFile() {
@@ -166,6 +213,56 @@ export default {
         this.downloadFile(response.data, response);
       } catch (error) {
         alert('Ошибка дешифрования файла');
+        if (error.response?.status === 429) {
+          const retryAfter = error.response.headers['retry-after'];
+          this.result = `Превышен лимит запросов. Попробуйте снова через ${retryAfter} секунд`;
+          
+          // Можно добавить автоматическую повторную попытку
+          setTimeout(() => {
+            this.decryptFile();
+          }, retryAfter * 1000);
+        } else {
+          this.result = 'Ошибка шифрования: ' + (error.response?.data?.detail || error.message);
+        }
+      }
+    },
+    async logout() {
+      try {
+        await axios.post('/auth/logout', {}, {
+          headers: {
+            'Authorization': `Bearer ${this.token}`
+          }
+        });
+        this.token = '';
+        localStorage.removeItem('token');
+        this.result = '';
+        this.text = '';
+        this.key = '';
+        this.file = null;
+        this.fileKey = '';
+      } catch (error) {
+        console.error('Ошибка при выходе:', error);
+      }
+    },
+
+    async getClientToken() {
+      try {
+        const formData = new URLSearchParams();
+        formData.append('client_id', this.clientId);
+        formData.append('client_secret', this.clientSecret);
+        formData.append('grant_type', 'client_credentials');
+
+        const response = await axios.post('/auth/token', formData, {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          }
+        });
+
+        this.token = response.data.access_token;
+        localStorage.setItem('token', response.data.access_token);
+        this.authError = '';
+      } catch (error) {
+        this.authError = 'Ошибка получения токена: неверные учетные данные';
       }
     },
     downloadFile(blob, response) {
@@ -187,7 +284,8 @@ export default {
       document.body.appendChild(link);
       link.click();
       link.remove();
-      }
+      },
+      
     }
 };
 </script>
@@ -235,6 +333,9 @@ input {
   color: #fff;
   border: 1px solid #3c3c3c;
   outline: none;
+  margin-right: 5px;
+  width: 300px;
+  height: 50px;
 }
 
 input::placeholder {
@@ -282,6 +383,34 @@ h2 {
 p {
   font-size: 1rem;
   line-height: 1.5;
+}
+
+.bg-red-500 {
+  background: #ef4444;
+}
+
+.bg-red-500:hover {
+  background: #dc2626;
+}
+
+.bg-purple-500 {
+  background: #8b5cf6;
+}
+
+.bg-purple-500:hover {
+  background: #7c3aed;
+}
+
+.absolute {
+  position: absolute;
+}
+
+.top-4 {
+  top: 1rem;
+}
+
+.right-4 {
+  right: 1rem;
 }
 
 .text-red-500 {
