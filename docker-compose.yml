@@ -10,7 +10,7 @@ services:
       - "8000:8000"
     volumes:
       - ./cm.backend:/app
-      - /app/env
+      - ../.env:/app/.env
     environment:
       - PYTHONPATH=/app
     networks:
@@ -28,7 +28,7 @@ services:
       - ./cm.frontend:/app
       - /app/node_modules
     environment:
-      - VITE_API_URL=http://backend:8000
+      - VITE_API_URL=http://cm-backend:8000
     depends_on:
       - backend
     networks:

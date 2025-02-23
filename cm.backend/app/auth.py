@@ -5,14 +5,14 @@ from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from app.models.user import UserCreate, Token
 
-SECRET_KEY = "your_secret_key"
+SECRET_KEY = "your-256-bit-secret-key-here"
 ALGORITHM = "HS256"
 
 router = APIRouter()
 
 def create_access_token(data: dict):
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(hours=1)
+    expire = datetime.now() + timedelta(hours=1)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt

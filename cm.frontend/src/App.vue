@@ -42,6 +42,12 @@ import axios from 'axios';
 axios.defaults.baseURL = 'http://localhost:8000';
 
 export default {
+  created() {
+      const savedToken = localStorage.getItem('token');
+      if (savedToken) {
+        this.token = savedToken;
+      }
+  },
   data() {
     return {
       username: '',
@@ -66,6 +72,7 @@ export default {
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
         });
         this.token = response.data.access_token;
+        localStorage.setItem('token', response.data.access_token);
         this.authError = '';
       } catch (error) {
         this.authError = 'Ошибка входа: неверные учетные данные';
@@ -75,28 +82,44 @@ export default {
       this.file = event.target.files[0];
     },
     async encryptText() {
+      if (!this.text) {
+        alert('Вставьте текст для шифрования!');
+        return;
+      }
       try {
-        const response = await axios.post('/encrypt/aes', new URLSearchParams({
-          text: this.text,
-          key: this.key
-        }), {
-          headers: { Authorization: `Bearer ${this.token}` }
+        const formData = new FormData();
+        formData.append('text', this.text);
+        formData.append('key', this.key);
+        const response = await axios.post('/encrypt/aes', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            'Authorization': `Bearer ${this.token}` 
+          }
         });
-        this.result = response.data.encrypted_text;
+        if (response.data && response.data.encrypted_text) {
+          this.result = response.data.encrypted_text;
+        } else {
+          throw new Error('Неверный формат ответа');
+        }
       } catch (error) {
-        this.result = 'Ошибка шифрования';
+        console.error(error);  // Добавить логирование ошибки
+        this.result = 'Ошибка шифрования: ' + (error.response?.data?.detail || error.message);
       }
     },
     async decryptText() {
       try {
-        const response = await axios.post('/decrypt/aes', new URLSearchParams({
-          text: this.text,
-          key: this.key,
-        }), {
-          headers: { Authorization: `Bearer ${this.token}` }
+        const formData = new FormData();  // Изменить на FormData
+        formData.append('text', this.text);
+        formData.append('key', this.key);
+        const response = await axios.post('/decrypt/aes', formData, {
+          headers: { 
+            'Content-Type': 'multipart/form-data',  // Добавить правильный Content-Type
+            'Authorization': `Bearer ${this.token}` 
+          }
         });
         this.result = response.data.decrypted_text;
       } catch (error) {
+        console.error(error);  // Добавить логирование ошибки
         this.result = 'Ошибка дешифрования';
       }
     },

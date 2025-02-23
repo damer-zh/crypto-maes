@@ -8,7 +8,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 import os
 from app.auth import create_access_token, verify_token
-from app.encryption.aes import encrypt_file_aes, decrypt_file_aes
+from app.encryption.aes import encrypt_file_aes, decrypt_file_aes, encrypt_aes, decrypt_aes
 from app.auth import router as auth_router
 from fastapi.responses import StreamingResponse
 from io import BytesIO
@@ -68,22 +68,27 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 @app.post("/encrypt/aes")
-def encrypt_aes(
+def encrypt_text_aes(
     text: str = Form(...),
     key: str = Form(...),
     token: str = Depends(oauth2_scheme)
 ):
+    verify_token(token)
+
+    if len(key) not in [16, 24, 32]:
+        logger.warning("Неверная длина ключа")
+        raise HTTPException(status_code=400, detail="Key must be 16, 24, or 32 bytes long")
+    
     try:
-        verify_token(token)
         encrypted_text = encrypt_aes(text.encode(), key)
         logger.info("Текст успешно зашифрован")
-        return {"encrypted_text": encrypted_text.hex()}
+        return {"encrypted_text": encrypted_text}
     except Exception as e:
         logger.error(f"Ошибка шифрования текста: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/decrypt/aes")
-def decrypt_aes(
+def decrypt_text_aes(
     text: str = Form(...),
     key: str = Form(...),
     token: str = Depends(oauth2_scheme)
@@ -164,9 +169,9 @@ def decrypt_file(
             f.write(decrypted_content)
 
         logger.info(f"Файл успешно расшифрован и сохранен как {output_file}")
-        return FileResponse(
-            output_file, 
-            headers={"Content-Disposition": f"attachment; filename={filename}_decrypted{ext}"}
+        return StreamingResponse(
+            BytesIO(decrypted_content), 
+            headers={"Content-Disposition": f"attachment; filename={file.filename.replace('.enc', '')}"}
             )
 
     except Exception as e:
