@@ -29,13 +29,13 @@
 - Python 3.10+
 - Node.js 16+
 
-### Установка
+## Установка
 
-## Клонирование репозитория
+### Клонирование репозитория
 git clone <repository-url>
-## Создание .env файла
+#### Создание .env файла
 Для примера возьмите .env.example, уберите .example, и замените значения на свои
-## Запуск с Docker Compose
+#### Запуск с Docker Compose
 docker-compose up --build
 
 
