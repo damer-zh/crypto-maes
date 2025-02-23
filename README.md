@@ -21,28 +21,6 @@
 - Redis (для rate limiting и кэширования)
 - Docker (контейнеризация)
 
-### Структура проекта
-project/
-├── backend/
-│ ├── app/
-│ │ ├── middleware/
-│ │ │ └── rate_limiter.py
-│ │ ├── models/
-│ │ │ └── user.py
-│ │ ├── encryption/
-│ │ │ └── aes.py
-│ │ ├── auth.py
-│ │ └── main.py
-│ ├── Dockerfile
-│ └── requirements.txt
-├── frontend/
-│ ├── src/
-│ │ ├── App.vue
-│ │ └── main.js
-│ ├── Dockerfile
-│ └── package.json
-└── docker-compose.yml
-
 ## Установка и запуск
 
 ### Предварительные требования
